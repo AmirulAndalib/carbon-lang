@@ -2,8 +2,37 @@
 # Exceptions. See /LICENSE for license information.
 # SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 
-build --crosstool_top=@bazel_cc_toolchain
-build --host_crosstool_top=@bazel_cc_toolchain
+# Ensure all builds have Carbon's workspace status attached. We have carefully
+# factored the stamping done by this to avoid excessive build performance impact
+# and so enable stamping with it by default. CI and systems especially dependent
+# on caching should explicitly use `--nostamp`.
+build --workspace_status_command=./scripts/workspace_status.py
+build --stamp
+
+# Provide aliases for configuring the release and pre-release version being
+# built. For documentation of these flags, see //bazel/version/BUILD.
+build --flag_alias=release=//bazel/version:release
+build --flag_alias=pre_release=//bazel/version:pre_release
+build --flag_alias=rc_number=//bazel/version:rc_number
+build --flag_alias=nightly_date=//bazel/version:nightly_date
+
+# Support running clang-tidy with:
+#   bazel build --config=clang-tidy -k //...
+# See: https://github.com/erenon/bazel_clang_tidy
+build:clang-tidy --aspects @bazel_clang_tidy//clang_tidy:clang_tidy.bzl%clang_tidy_aspect
+build:clang-tidy --output_groups=report
+build:clang-tidy --@bazel_clang_tidy//:clang_tidy_config=//:clang_tidy_config
+build:clang-tidy --action_env=PATH --host_action_env=PATH
+
+# This warning seems to incorrectly fire in this build configuration, despite
+# not firing in our normal builds.
+build:clang-tidy --copt=-Wno-unknown-pragmas
+
+# Provide an alias for controlling the `carbon_*` Bazel rules' configuration. We
+# enable use of the target config here to make our build and tests more
+# efficient, see the documentation in //bazel/carbon_rules/BUILD for details.
+build --flag_alias=use_target_config_carbon_rules=//bazel/carbon_rules:use_target_config_carbon_rules
+build --use_target_config_carbon_rules
 
 # Default to using a disk cache to minimize re-building LLVM and Clang which we
 # try to avoid updating too frequently to minimize rebuild cost. The location
@@ -18,16 +47,15 @@ build --disk_cache=~/.cache/carbon-lang-build-cache
 # future Bazel releases.
 build --experimental_guard_against_concurrent_changes
 
-# Allow the toolchain to configure itself differently in the host build from
-# the target build. Even when the host and target platforms are ostensibly the
-# same (and use identical toolchains), it is beneficial to be able to configure
-# the specific toolchain features enabled for the target separately from the
-# host. For example, sanitizers make sense for the target significantly more
-# than for the host.
-#
-# Bazel bug tracking undoing the default here:
-# https://github.com/bazelbuild/bazel/issues/13315
-build --incompatible_dont_enable_host_nonhost_crosstool_features=false
+# Used by clang_configuration.bzl.
+build --action_env=CC --host_action_env=CC
+build --action_env=CMAKE_SYSROOT --host_action_env=CMAKE_SYSROOT
+
+# Disable warnings for all external compilations. These involve code that isn't
+# developed as part of Carbon and may be difficult or impossible to patch, so
+# warnings aren't likely to be actionable.
+build --per_file_copt=external/.*\.(c|cc|cpp|cxx)$@-w
+build --host_per_file_copt=external/.*\.(c|cc|cpp|cxx)$@-w
 
 # Default dynamic linking to off. While this can help build performance in some
 # edge cases with very large linked executables and a slow linker, between using
@@ -48,16 +76,18 @@ build --strip=never
 # Enable Abseil for GoogleTest.
 build --define=absl=1
 
+# Enable TCMalloc on Linux in optimized builds.
+build --custom_malloc=//bazel/malloc:tcmalloc_if_linux_opt
+
 # Configuration for enabling Address Sanitizer. Note that this is enabled by
 # default for fastbuild. The config is provided to enable ASan even in
-# optimized or other build configurations.
+# optimized or other build configurations. Note that ASan and TCMalloc are
+# incompatible so this explicitly forces the system malloc.
 build:asan --features=asan
+build:asan --custom_malloc=@bazel_tools//tools/cpp:malloc
 
 # Configuration for enabling LibFuzzer (along with ASan).
 build:fuzzer --features=fuzzer
-
-# Proto fuzzer specific configuration.
-build:proto-fuzzer --features=proto-fuzzer
 
 # Always allow tests to symbolize themselves with whatever `llvm-symbolize` is
 # in the users environment.
@@ -69,6 +99,124 @@ build --test_env=ASAN_SYMBOLIZER_PATH
 # `en_US`.
 build --action_env=LANG=en_US.UTF-8
 
+# Allow per-platform configuration.
+build --enable_platform_specific_config
+
+# Enable libpfm for google_benchmark on Linux only.
+build:linux --define=pfm=1
+
+# Enable split debug info on Linux, which is significantly more space efficient
+# and should work well with modern debuggers. Note that this is Linux specific
+# as macOS has its own approach that is always partially but not completely
+# split.
+#
+# Note: if using GDB, see documentation to get that working:
+# https://docs.carbon-lang.dev/docs/project/contribution_tools.html#debugging-with-gdb-instead-of-lldb
+#
+# TODO: Bazel has a bug where it doesn't manage dwo files in the cache correctly.
+# build:linux --fission=yes
+
+# Disables `actions.declare_symlink`. Done for cross-environment support.
+build --allow_unresolved_symlinks=false
+
 # Allow users to override any of the flags desired by importing a user-specific
 # RC file here if present.
 try-import %workspace%/user.bazelrc
+
+# This excludes things like rules_android to reduce warnings.
+# TODO: There's a pending fix, so hopefully we can remove it soon.
+# - Issue: https://github.com/bazelbuild/bazel/issues/23929
+# - 8.0.1 tracker: https://github.com/bazelbuild/bazel/issues/24649
+common --incompatible_autoload_externally=+@rules_java,+@rules_python,+@rules_shell
+
+# Query error in `@bazel_tools`. This reproduces with
+# `bazel query 'deps(//...)'`.
+# TODO: Enable the flag once compatibility issues are fixed.
+# common --incompatible_disable_non_executable_java_binary
+
+# Incompatible with the clang-tidy build mode.
+# TODO: Enable the flag once compatibility issues are fixed.
+# common --incompatible_auto_exec_groups
+
+# Incompatible with `rules_cc`.
+# TODO: Enable the flag once compatibility issues are fixed.
+# common --incompatible_no_rule_outputs_param
+# common --incompatible_stop_exporting_language_modules
+
+# Incompatible with `rules_flex`.
+# TODO: Enable the flag once compatibility issues are fixed.
+# common --incompatible_disable_starlark_host_transitions
+
+# Incompatible with `rules_pkg`.
+# TODO: Enable the flag once compatibility issues are fixed.
+# common --incompatible_disable_target_default_provider_fields
+
+# Incompatible with `rules_shell`.
+# TODO: Enable the flag once compatibility issues are fixed.
+# common --incompatible_check_visibility_for_toolchains
+
+# Enable as many incompatible flags as we can, per
+# https://bazel.build/release/backward-compatibility. To get the latest list,
+# using `bazelisk --migrate build //...` will help.
+common --incompatible_allow_tags_propagation
+common --incompatible_always_check_depset_elements
+common --incompatible_always_include_files_in_data
+common --incompatible_bazel_test_exec_run_under
+common --incompatible_check_sharding_support
+common --incompatible_check_testonly_for_output_files
+common --incompatible_config_setting_private_default_visibility
+common --incompatible_default_to_explicit_init_py
+common --incompatible_depset_for_java_output_source_jars
+common --incompatible_depset_for_libraries_to_link_getter
+common --incompatible_disable_native_android_rules
+common --incompatible_disable_native_repo_rules
+common --incompatible_disable_objc_library_transition
+common --incompatible_disable_target_provider_fields
+common --incompatible_disallow_ctx_resolve_tools
+common --incompatible_disallow_legacy_py_provider
+common --incompatible_disallow_sdk_frameworks_attributes
+common --incompatible_disallow_struct_provider_syntax
+common --incompatible_do_not_split_linking_cmdline
+common --incompatible_dont_enable_host_nonhost_crosstool_features
+common --incompatible_dont_use_javasourceinfoprovider
+common --incompatible_enable_apple_toolchain_resolution
+common --incompatible_enable_deprecated_label_apis
+common --incompatible_enable_proto_toolchain_resolution
+common --incompatible_enforce_config_setting_visibility
+common --incompatible_exclusive_test_sandboxed
+common --incompatible_fail_on_unknown_attributes
+common --incompatible_fix_package_group_reporoot_syntax
+common --incompatible_java_common_parameters
+common --incompatible_legacy_local_fallback
+common --incompatible_make_thinlto_command_lines_standalone
+common --incompatible_merge_fixed_and_default_shell_env
+common --incompatible_merge_genfiles_directory
+common --incompatible_modify_execution_info_additive
+common --incompatible_new_actions_api
+common --incompatible_no_attr_license
+common --incompatible_no_implicit_file_export
+common --incompatible_no_implicit_watch_label
+common --incompatible_objc_alwayslink_by_default
+common --incompatible_package_group_has_public_syntax
+common --incompatible_py2_outputs_are_suffixed
+common --incompatible_py3_is_default
+common --incompatible_python_disable_py2
+common --incompatible_python_disallow_native_rules
+common --incompatible_remote_use_new_exit_code_for_lost_inputs
+common --incompatible_remove_legacy_whole_archive
+common --incompatible_require_ctx_in_configure_features
+common --incompatible_require_linker_input_cc_api
+common --incompatible_run_shell_command_string
+common --incompatible_sandbox_hermetic_tmp
+common --incompatible_simplify_unconditional_selects_in_rule_attrs
+common --incompatible_stop_exporting_build_file_path
+common --incompatible_strict_action_env
+common --incompatible_strip_executable_safely
+common --incompatible_top_level_aspects_require_providers
+common --incompatible_unambiguous_label_stringification
+common --incompatible_use_cc_configure_from_rules_cc
+common --incompatible_use_new_cgroup_implementation
+common --incompatible_use_plus_in_repo_names
+common --incompatible_use_python_toolchains
+common --incompatible_validate_top_level_header_inclusions
+common --incompatible_visibility_private_attributes_at_definition

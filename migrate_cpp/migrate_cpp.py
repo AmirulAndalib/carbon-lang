@@ -11,7 +11,7 @@ import glob
 import os
 import subprocess
 import sys
-from typing import List, Optional
+from typing import Optional
 
 _CPP_REFACTORING = "./cpp_refactoring/cpp_refactoring"
 _H_EXTS = {".h", ".hpp"}
@@ -21,7 +21,7 @@ _CPP_EXTS = {".c", ".cc", ".cpp", ".cxx"}
 class _Workflow:
     _parsed_args: argparse.Namespace
     _data_dir: str
-    _cpp_files: Optional[List[str]]
+    _cpp_files: Optional[list[str]]
 
     def __init__(self) -> None:
         """Parses command-line arguments and flags."""
@@ -50,7 +50,7 @@ class _Workflow:
             self._print_header("Done!")
         except subprocess.CalledProcessError as e:
             # Discard the stack for subprocess errors.
-            sys.exit(e)
+            sys.exit(str(e))
 
     def _data_file(self, relative_path: str) -> str:
         """Returns the path to a data file."""
