@@ -6,8 +6,15 @@
 
 #include <gtest/gtest.h>
 
-namespace Carbon::Testing {
+#include "common/error_test_helpers.h"
+#include "common/raw_string_ostream.h"
+
+namespace Carbon {
 namespace {
+
+using ::Carbon::Testing::IsError;
+using ::Carbon::Testing::IsSuccess;
+using ::testing::Eq;
 
 TEST(ErrorTest, Error) {
   Error err("test");
@@ -24,8 +31,8 @@ TEST(ErrorTest, IndirectError) { EXPECT_EQ(IndirectError().message(), "test"); }
 
 TEST(ErrorTest, ErrorOr) {
   ErrorOr<int> err(Error("test"));
-  EXPECT_FALSE(err.ok());
-  EXPECT_EQ(err.error().message(), "test");
+
+  EXPECT_THAT(err, IsError("test"));
 }
 
 TEST(ErrorTest, ErrorOrValue) { EXPECT_TRUE(ErrorOr<int>(0).ok()); }
@@ -64,8 +71,7 @@ TEST(ErrorTest, ReturnIfErrorHasError) {
     CARBON_RETURN_IF_ERROR(ErrorOr<Success>(Error("error")));
     return Success();
   }();
-  ASSERT_FALSE(result.ok());
-  EXPECT_EQ(result.error().message(), "error");
+  EXPECT_THAT(result, IsError("error"));
 }
 
 TEST(ErrorTest, AssignOrReturnNoError) {
@@ -76,8 +82,7 @@ TEST(ErrorTest, AssignOrReturnNoError) {
     CARBON_ASSIGN_OR_RETURN(c, ErrorOr<int>(3));
     return a + b + c;
   }();
-  ASSERT_TRUE(result.ok());
-  EXPECT_EQ(6, *result);
+  EXPECT_THAT(result, IsSuccess(Eq(6)));
 }
 
 TEST(ErrorTest, AssignOrReturnHasDirectError) {
@@ -85,7 +90,7 @@ TEST(ErrorTest, AssignOrReturnHasDirectError) {
     CARBON_RETURN_IF_ERROR(ErrorOr<int>(Error("error")));
     return 0;
   }();
-  ASSERT_FALSE(result.ok());
+  EXPECT_THAT(result, IsError("error"));
 }
 
 TEST(ErrorTest, AssignOrReturnHasErrorInExpected) {
@@ -93,9 +98,20 @@ TEST(ErrorTest, AssignOrReturnHasErrorInExpected) {
     CARBON_ASSIGN_OR_RETURN(int a, ErrorOr<int>(Error("error")));
     return a;
   }();
-  ASSERT_FALSE(result.ok());
-  EXPECT_EQ(result.error().message(), "error");
+  EXPECT_THAT(result, IsError("error"));
+}
+
+TEST(ErrorTest, ErrorBuilderOperatorImplicitCast) {
+  ErrorOr<int> result = ErrorBuilder() << "msg";
+  EXPECT_THAT(result, IsError("msg"));
+}
+
+TEST(ErrorTest, StreamError) {
+  Error result = ErrorBuilder("TestFunc") << "msg";
+  RawStringOstream result_stream;
+  result_stream << result;
+  EXPECT_EQ(result_stream.TakeStr(), "TestFunc: msg");
 }
 
 }  // namespace
-}  // namespace Carbon::Testing
+}  // namespace Carbon

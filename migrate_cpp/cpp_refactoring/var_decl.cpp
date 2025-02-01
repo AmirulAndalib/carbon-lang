@@ -5,7 +5,9 @@
 #include "migrate_cpp/cpp_refactoring/var_decl.h"
 
 #include "clang/ASTMatchers/ASTMatchers.h"
+#include "llvm/Support/FormatVariadic.h"
 
+// NOLINTNEXTLINE(readability-identifier-naming)
 namespace cam = ::clang::ast_matchers;
 
 namespace Carbon {
@@ -35,7 +37,6 @@ auto VarDecl::GetTypeStr(const clang::VarDecl& decl) -> std::string {
   auto type_loc = decl.getTypeSourceInfo()->getTypeLoc();
   std::vector<std::pair<clang::TypeLoc::TypeLocClass, std::string>> segments;
   while (!type_loc.isNull()) {
-    std::string text;
     auto qualifiers = type_loc.getType().getLocalQualifiers();
     std::string qual_str;
     if (!qualifiers.empty()) {
@@ -54,7 +55,8 @@ auto VarDecl::GetTypeStr(const clang::VarDecl& decl) -> std::string {
     } else if (range_str.empty()) {
       segments.push_back({type_loc_class, qual_str});
     } else {
-      segments.push_back({type_loc_class, qual_str + " " + range_str});
+      segments.push_back(
+          {type_loc_class, llvm::formatv("{0} {1}", qual_str, range_str)});
     }
 
     type_loc = type_loc.getNextTypeLoc();
