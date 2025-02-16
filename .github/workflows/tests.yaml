@@ -2,129 +2,87 @@
 # Exceptions. See /LICENSE for license information.
 # SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 
-name: test
+name: Tests
 
 on:
   push:
-    branches: [trunk]
-    paths:
-      # Conservatively run the tests. However, skip them if the only paths in
-      # the pull request match files that we know don't impact the build.
-      - '**'
-      - '!**/*.md'
-      - '!LICENSE'
-      - '!CODEOWNERS'
-      - '!.git*'
-  pull_request_target:
-    paths:
-      # Conservatively run the tests. However, skip them if the only paths in
-      # the pull request match files that we know don't impact the build.
-      - '**'
-      - '!**/*.md'
-      - '!LICENSE'
-      - '!CODEOWNERS'
-      - '!.git*'
+    branches: [trunk, action-test]
+  pull_request:
+  merge_group:
+
+permissions:
+  contents: read # For actions/checkout.
+  pull-requests: read # For dorny/paths-filter to read pull requests.
+
+# Cancel previous workflows on the PR when there are multiple fast commits.
+# https://docs.github.com/en/actions/using-workflows/workflow-syntax-for-github-actions#concurrency
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.ref }}
+  cancel-in-progress: true
 
 jobs:
   test:
     strategy:
       matrix:
-        os: [ubuntu-latest, macos-latest]
+        # Test a recent version of each supported OS.
+        runner: ['ubuntu-22.04', 'macos-14']
         build_mode: [fastbuild, opt]
-    runs-on: ${{ matrix.os }}
+    runs-on: ${{ matrix.runner }}
+
     steps:
-      # Checkout the pull request head or the branch.
-      - name: Checkout pull request
-        if: github.event_name == 'pull_request_target'
-        uses: actions/checkout@v3
+      - name: Harden Runner
+        uses: step-security/harden-runner@17d0e2bd7d51742c71671bd19fa12bdc9d40a3d6 # v2.8.1
         with:
-          ref: ${{ github.event.pull_request.head.sha }}
+          egress-policy: block
+          # When adding endpoints, see README.md.
+          # prettier-ignore
+          allowed-endpoints: >
+            *.dl.sourceforge.net:443
+            api.github.com:443
+            bcr.bazel.build:443
+            downloads.sourceforge.net:443
+            github.com:443
+            mirrors.kernel.org:443
+            nodejs.org:443
+            oauth2.googleapis.com:443
+            objects.githubusercontent.com:443
+            pypi.org:443
+            releases.bazel.build:443
+            sourceforge.net:443
+            storage.googleapis.com:443
 
-      - name: Checkout branch
-        if: github.event_name != 'pull_request_target'
-        uses: actions/checkout@v3
+      - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
 
-      # Setup Python and related tools.
-      - uses: actions/setup-python@v4
+      - id: test-setup
+        uses: ./.github/actions/test-setup
         with:
-          # Match the min version listed in docs/project/contribution_tools.md
-          python-version: '3.9'
+          matrix_runner: ${{ matrix.runner }}
+          base_sha:
+            ${{ github.event_name == 'pull_request' &&
+            github.event.pull_request.base.sha ||
+            github.event.merge_group.base_sha }}
+          remote_cache_key: ${{ secrets.CARBON_BUILDS_GITHUB }}
+          targets_file: ${{ runner.temp }}/targets
 
-      # On macOS we need Go and to use it to install Bazelisk.
-      - uses: actions/setup-go@v3
-        if: matrix.os == 'macos-latest'
-      - name: Install bazelisk
-        if: matrix.os == 'macos-latest'
-        run: |
-          go get github.com/bazelbuild/bazelisk
-          echo "$(go env GOPATH)/bin" >> $GITHUB_PATH
-
-      # Setup to the latest LLVM and Clang release.
-      #
-      # Ideally we would use the pre-installed versions in the image, but the
-      # debian packages for LLVM-12 are broken due to several bugs:
-      # https://bugs.llvm.org/show_bug.cgi?id=43604
-      # https://bugs.llvm.org/show_bug.cgi?id=46321
-      #
-      # For now, we rely on Homebrew to manage installing a correctly built
-      # toolchain. We also take some care to be as resilient as possible to
-      # issues fetching and installing the toolchain.
-      - name: Setup LLVM and Clang
-        run: |
-          brew update
-          brew install --force-bottle --only-dependencies llvm
-          brew install --force-bottle --force --verbose llvm
-          brew info llvm
-          brew config
-          echo "$(brew --prefix llvm)/bin" >> $GITHUB_PATH
-
-      # Print the various tool paths and versions to help in debugging.
-      - name: Print tool debugging info
-        run: |
-          echo $PATH
-          which bazelisk
-          bazelisk --version
-          which python
-          python --version
-          which clang
-          clang --version
-          which clang++
-          clang++ --version
-
-      # Extract our access key for our build cache.
-      - name: Extract access key
-        env:
-          GCP_BUILDS_SERVICE_ACCOUNT: ${{ secrets.GCP_BUILDS_SERVICE_ACCOUNT }}
-        run: |
-          echo "$GCP_BUILDS_SERVICE_ACCOUNT" \
-            | base64 -d > $HOME/gcp-builds-service-account.json
-
-      # Add our bazel configuration and print basic info to ease debugging.
-      - name: Configure Bazel and print info
-        run: |
-          cat >user.bazelrc <<EOF
-          # Enable remote cache for our CI.
-          build --remote_cache=https://storage.googleapis.com/carbon-builds-github-${{ matrix.os }}
-          build --google_credentials=$HOME/gcp-builds-service-account.json
-
-          # General build options.
-          build --verbose_failures
-          test --test_output=errors
-          EOF
-          bazelisk info
-
-      # Build all targets first to isolate build failures.
-      - name: Build (${{ matrix.build_mode }})
-        env:
-          # 'libtool_check_unique failed to generate' workaround.
-          # https://github.com/bazelbuild/bazel/issues/14113#issuecomment-999794586
-          BAZEL_USE_CPP_ONLY_TOOLCHAIN: 1
-        run: bazelisk build -c ${{ matrix.build_mode }} //...:all
-
-      # Run all test targets.
+      # Build and run just the tests impacted by the PR or merge group.
       - name: Test (${{ matrix.build_mode }})
+        if: steps.test-setup.outputs.has_code == 'true'
+        shell: bash
         env:
           # 'libtool_check_unique failed to generate' workaround.
           # https://github.com/bazelbuild/bazel/issues/14113#issuecomment-999794586
           BAZEL_USE_CPP_ONLY_TOOLCHAIN: 1
-        run: bazelisk test -c ${{ matrix.build_mode }} //...:all
+          TARGETS_FILE: ${{ runner.temp }}/targets
+        run: |
+          # Decrease the jobs sharply if we see repeated failures to try to
+          # work around transient network errors even if it makes things
+          # slower.
+          ./scripts/run_bazel.py \
+            --attempts=5 --jobs-on-last-attempt=4 \
+            test -c ${{ matrix.build_mode }} \
+            --target_pattern_file=$TARGETS_FILE
+
+      # See "Disk space before build" in `test-setup`.
+      - name: Disk space after build
+        if: steps.test-setup.outputs.has_code == 'true'
+        run: df -h
