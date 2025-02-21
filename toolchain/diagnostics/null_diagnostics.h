@@ -9,30 +9,32 @@
 
 namespace Carbon {
 
-template <typename LocationT>
-inline auto NullDiagnosticLocationTranslator()
-    -> DiagnosticLocationTranslator<LocationT>& {
-  struct Translator : DiagnosticLocationTranslator<LocationT> {
-    auto GetLocation(LocationT /*loc*/) -> DiagnosticLocation override {
-      return {};
-    }
-  };
-  static auto* translator = new Translator;
-  return *translator;
-}
-
+// Returns a singleton consumer that doesn't print its diagnostics.
 inline auto NullDiagnosticConsumer() -> DiagnosticConsumer& {
   struct Consumer : DiagnosticConsumer {
-    auto HandleDiagnostic(const Diagnostic& d) -> void override {}
+    auto HandleDiagnostic(Diagnostic /*d*/) -> void override {}
   };
   static auto* consumer = new Consumer;
   return *consumer;
 }
 
-template <typename LocationT>
-inline auto NullDiagnosticEmitter() -> DiagnosticEmitter<LocationT>& {
-  static auto* emitter = new DiagnosticEmitter<LocationT>(
-      NullDiagnosticLocationTranslator<LocationT>(), NullDiagnosticConsumer());
+// Returns a singleton emitter that doesn't print its diagnostics.
+template <typename LocT>
+inline auto NullDiagnosticEmitter() -> DiagnosticEmitter<LocT>& {
+  class Emitter : public DiagnosticEmitter<LocT> {
+   public:
+    using DiagnosticEmitter<LocT>::DiagnosticEmitter;
+
+   protected:
+    // Converts a filename directly to the diagnostic location.
+    auto ConvertLoc(LocT /*loc*/,
+                    DiagnosticEmitter<LocT>::ContextFnT /*context_fn*/) const
+        -> ConvertedDiagnosticLoc override {
+      return {.loc = {}, .last_byte_offset = -1};
+    }
+  };
+
+  static auto* emitter = new Emitter(&NullDiagnosticConsumer());
   return *emitter;
 }
 
