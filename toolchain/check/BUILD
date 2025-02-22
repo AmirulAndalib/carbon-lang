@@ -1,0 +1,296 @@
+# Part of the Carbon Language project, under the Apache License v2.0 with LLVM
+# Exceptions. See /LICENSE for license information.
+# SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
+
+load("@rules_cc//cc:defs.bzl", "cc_library")
+load("//testing/fuzzing:rules.bzl", "cc_fuzz_test")
+
+package(default_visibility = ["//visibility:public"])
+
+filegroup(
+    name = "testdata",
+    data = glob(["testdata/**/*.carbon"]),
+)
+
+cc_library(
+    name = "context",
+    srcs = [
+        "call.cpp",
+        "context.cpp",
+        "control_flow.cpp",
+        "convert.cpp",
+        "decl_name_stack.cpp",
+        "deduce.cpp",
+        "eval.cpp",
+        "facet_type.cpp",
+        "function.cpp",
+        "generic.cpp",
+        "global_init.cpp",
+        "impl_lookup.cpp",
+        "import.cpp",
+        "import_cpp.cpp",
+        "import_ref.cpp",
+        "inst.cpp",
+        "inst_block_stack.cpp",
+        "interface.cpp",
+        "literal.cpp",
+        "member_access.cpp",
+        "merge.cpp",
+        "modifiers.cpp",
+        "name_component.cpp",
+        "name_lookup.cpp",
+        "operator.cpp",
+        "pattern_match.cpp",
+        "return.cpp",
+        "subpattern.cpp",
+        "subst.cpp",
+        "type.cpp",
+        "type_completion.cpp",
+    ],
+    hdrs = [
+        "call.h",
+        "context.h",
+        "control_flow.h",
+        "convert.h",
+        "decl_introducer_state.h",
+        "decl_name_stack.h",
+        "deduce.h",
+        "diagnostic_helpers.h",
+        "eval.h",
+        "facet_type.h",
+        "function.h",
+        "generic.h",
+        "global_init.h",
+        "impl_lookup.h",
+        "import.h",
+        "import_cpp.h",
+        "import_ref.h",
+        "inst.h",
+        "inst_block_stack.h",
+        "interface.h",
+        "keyword_modifier_set.h",
+        "literal.h",
+        "member_access.h",
+        "merge.h",
+        "modifiers.h",
+        "name_component.h",
+        "name_lookup.h",
+        "operator.h",
+        "param_and_arg_refs_stack.h",
+        "pattern_match.h",
+        "pending_block.h",
+        "region_stack.h",
+        "return.h",
+        "subpattern.h",
+        "subst.h",
+        "type.h",
+        "type_completion.h",
+    ],
+    deps = [
+        ":node_stack",
+        "//common:array_stack",
+        "//common:check",
+        "//common:map",
+        "//common:raw_string_ostream",
+        "//common:set",
+        "//common:vlog",
+        "//toolchain/base:index_base",
+        "//toolchain/base:kind_switch",
+        "//toolchain/check:generic_region_stack",
+        "//toolchain/check:scope_stack",
+        "//toolchain/diagnostics:diagnostic_emitter",
+        "//toolchain/diagnostics:format_providers",
+        "//toolchain/lex:token_kind",
+        "//toolchain/lex:tokenized_buffer",
+        "//toolchain/parse:node_kind",
+        "//toolchain/parse:tree",
+        "//toolchain/sem_ir:file",
+        "//toolchain/sem_ir:formatter",
+        "//toolchain/sem_ir:inst",
+        "//toolchain/sem_ir:typed_insts",
+        "@llvm-project//clang:frontend",
+        "@llvm-project//clang:tooling",
+        "@llvm-project//llvm:Support",
+    ],
+)
+
+cc_library(
+    name = "dump",
+    srcs = ["dump.cpp"],
+    deps = [
+        ":context",
+        "//common:check",
+        "//common:ostream",
+        "//toolchain/lex:dump",
+        "//toolchain/lex:tokenized_buffer",
+        "//toolchain/parse:dump",
+        "//toolchain/parse:tree",
+        "//toolchain/sem_ir:dump",
+        "//toolchain/sem_ir:file",
+    ],
+    # Always link dump methods.
+    alwayslink = 1,
+)
+
+cc_library(
+    name = "check",
+    srcs = [
+        "check.cpp",
+        "check_unit.cpp",
+        "check_unit.h",
+        "deferred_definition_worklist.cpp",
+        "deferred_definition_worklist.h",
+        "handle.h",
+        "node_id_traversal.cpp",
+        "node_id_traversal.h",
+    ] +
+    # Glob handler files to avoid missing any.
+    glob([
+        "handle_*.cpp",
+    ]),
+    hdrs = ["check.h"],
+    deps = [
+        ":context",
+        ":dump",
+        ":impl",
+        ":pointer_dereference",
+        ":sem_ir_loc_diagnostic_emitter",
+        "//common:check",
+        "//common:error",
+        "//common:map",
+        "//common:ostream",
+        "//common:variant_helpers",
+        "//common:vlog",
+        "//toolchain/base:kind_switch",
+        "//toolchain/base:pretty_stack_trace_function",
+        "//toolchain/base:shared_value_stores",
+        "//toolchain/base:timings",
+        "//toolchain/diagnostics:diagnostic_emitter",
+        "//toolchain/diagnostics:format_providers",
+        "//toolchain/lex:token_index",
+        "//toolchain/lex:token_kind",
+        "//toolchain/lex:tokenized_buffer",
+        "//toolchain/parse:node_kind",
+        "//toolchain/parse:tree",
+        "//toolchain/sem_ir:entry_point",
+        "//toolchain/sem_ir:file",
+        "//toolchain/sem_ir:inst",
+        "//toolchain/sem_ir:typed_insts",
+        "@llvm-project//llvm:Support",
+    ],
+)
+
+cc_fuzz_test(
+    name = "check_fuzzer",
+    size = "small",
+    srcs = ["check_fuzzer.cpp"],
+    corpus = glob(["fuzzer_corpus/*"]),
+    deps = [
+        "//common:exe_path",
+        "//testing/fuzzing:libfuzzer_header",
+        "//toolchain/driver",
+        "@llvm-project//llvm:Support",
+    ],
+)
+
+cc_library(
+    name = "generic_region_stack",
+    srcs = ["generic_region_stack.cpp"],
+    hdrs = ["generic_region_stack.h"],
+    deps = [
+        "//common:array_stack",
+        "//common:check",
+        "//common:ostream",
+        "//common:vlog",
+        "//toolchain/sem_ir:file",
+        "//toolchain/sem_ir:inst",
+        "//toolchain/sem_ir:typed_insts",
+        "@llvm-project//llvm:Support",
+    ],
+)
+
+cc_library(
+    name = "impl",
+    srcs = ["impl.cpp"],
+    hdrs = ["impl.h"],
+    deps = [
+        ":context",
+        "//common:check",
+        "//toolchain/base:kind_switch",
+        "//toolchain/diagnostics:diagnostic_emitter",
+        "//toolchain/sem_ir:file",
+        "//toolchain/sem_ir:inst",
+        "//toolchain/sem_ir:typed_insts",
+    ],
+)
+
+cc_library(
+    name = "node_stack",
+    srcs = ["node_stack.cpp"],
+    hdrs = ["node_stack.h"],
+    deps = [
+        "//common:check",
+        "//common:ostream",
+        "//common:vlog",
+        "//toolchain/parse:node_kind",
+        "//toolchain/parse:tree",
+        "//toolchain/sem_ir:typed_insts",
+        "@llvm-project//llvm:Support",
+    ],
+)
+
+cc_library(
+    name = "pointer_dereference",
+    srcs = ["pointer_dereference.cpp"],
+    hdrs = ["pointer_dereference.h"],
+    deps = [
+        ":context",
+        "//common:check",
+        "//toolchain/parse:node_kind",
+        "//toolchain/sem_ir:inst",
+        "//toolchain/sem_ir:typed_insts",
+        "@llvm-project//llvm:Support",
+    ],
+)
+
+cc_library(
+    name = "scope_stack",
+    srcs = ["scope_stack.cpp"],
+    hdrs = [
+        "full_pattern_stack.h",
+        "lexical_lookup.h",
+        "scope_index.h",
+        "scope_stack.h",
+    ],
+    deps = [
+        "//common:array_stack",
+        "//common:check",
+        "//common:ostream",
+        "//common:set",
+        "//common:vlog",
+        "//toolchain/base:index_base",
+        "//toolchain/base:value_ids",
+        "//toolchain/base:value_store",
+        "//toolchain/sem_ir:file",
+        "//toolchain/sem_ir:typed_insts",
+        "@llvm-project//llvm:Support",
+    ],
+)
+
+cc_library(
+    name = "sem_ir_loc_diagnostic_emitter",
+    srcs = ["sem_ir_loc_diagnostic_emitter.cpp"],
+    hdrs = ["sem_ir_loc_diagnostic_emitter.h"],
+    deps = [
+        ":context",
+        "//common:raw_string_ostream",
+        "//toolchain/diagnostics:diagnostic_emitter",
+        "//toolchain/lex:token_index",
+        "//toolchain/parse:tree",
+        "//toolchain/sem_ir:absolute_node_id",
+        "//toolchain/sem_ir:file",
+        "//toolchain/sem_ir:stringify_type",
+        "//toolchain/sem_ir:typed_insts",
+        "@llvm-project//llvm:Support",
+    ],
+)

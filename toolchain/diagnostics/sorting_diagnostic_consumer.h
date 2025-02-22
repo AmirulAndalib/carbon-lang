@@ -12,32 +12,49 @@
 namespace Carbon {
 
 // Buffers incoming diagnostics for printing and sorting.
+//
+// Sorting is based on `last_byte_offset` without taking the filename into
+// account. When processing multiple files, it's expected that separate
+// consumers will be used in order to keep diagnostics distinct. Typically
+// `Diagnostic::messages[0]` will always be a location in the consumer's primary
+// file, but if it needs to correspond to a different file, the
+// `last_byte_offset` must still indicate an offset within the primary file.
 class SortingDiagnosticConsumer : public DiagnosticConsumer {
  public:
   explicit SortingDiagnosticConsumer(DiagnosticConsumer& next_consumer)
       : next_consumer_(&next_consumer) {}
 
-  ~SortingDiagnosticConsumer() override { Flush(); }
+  ~SortingDiagnosticConsumer() override {
+    // We choose not to automatically flush diagnostics here, because they are
+    // likely to refer to data that gets destroyed before the diagnostics
+    // consumer is destroyed, because the diagnostics consumer is typically
+    // created before the objects that diagnostics refer into are created.
+    CARBON_CHECK(diagnostics_.empty(),
+                 "Must flush diagnostics consumer before destroying it");
+  }
 
   // Buffers the diagnostic.
-  auto HandleDiagnostic(const Diagnostic& diagnostic) -> void override {
-    diagnostics_.push_back(diagnostic);
+  auto HandleDiagnostic(Diagnostic diagnostic) -> void override {
+    diagnostics_.push_back(std::move(diagnostic));
   }
 
   // Sorts and flushes buffered diagnostics.
-  void Flush() override {
-    llvm::sort(diagnostics_, [](const Diagnostic& lhs, const Diagnostic& rhs) {
-      return std::tie(lhs.location.line_number, lhs.location.column_number) <
-             std::tie(rhs.location.line_number, rhs.location.column_number);
-    });
-    for (const auto& diagnostic : diagnostics_) {
-      next_consumer_->HandleDiagnostic(diagnostic);
+  auto Flush() -> void override {
+    llvm::stable_sort(diagnostics_,
+                      [](const Diagnostic& lhs, const Diagnostic& rhs) {
+                        return lhs.last_byte_offset < rhs.last_byte_offset;
+                      });
+    for (auto& diag : diagnostics_) {
+      next_consumer_->HandleDiagnostic(std::move(diag));
     }
     diagnostics_.clear();
   }
 
  private:
+  // A Diagnostic is undesirably large for inline storage by SmallVector, so we
+  // specify 0.
   llvm::SmallVector<Diagnostic, 0> diagnostics_;
+
   DiagnosticConsumer* next_consumer_;
 };
 
