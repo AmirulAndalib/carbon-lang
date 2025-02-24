@@ -4,179 +4,136 @@
 
 #include "toolchain/driver/driver.h"
 
-#include "llvm/ADT/ArrayRef.h"
-#include "llvm/ADT/StringExtras.h"
-#include "llvm/ADT/StringRef.h"
-#include "llvm/ADT/StringSwitch.h"
-#include "llvm/Support/Error.h"
-#include "llvm/Support/ErrorHandling.h"
-#include "llvm/Support/Format.h"
-#include "toolchain/diagnostics/sorting_diagnostic_consumer.h"
-#include "toolchain/lexer/tokenized_buffer.h"
-#include "toolchain/parser/parse_tree.h"
-#include "toolchain/source/source_buffer.h"
+#include <algorithm>
+#include <memory>
+#include <optional>
+
+#include "common/command_line.h"
+#include "common/version.h"
+#include "toolchain/driver/clang_subcommand.h"
+#include "toolchain/driver/compile_subcommand.h"
+#include "toolchain/driver/format_subcommand.h"
+#include "toolchain/driver/language_server_subcommand.h"
+#include "toolchain/driver/link_subcommand.h"
+#include "toolchain/driver/lld_subcommand.h"
 
 namespace Carbon {
 
 namespace {
+struct Options {
+  static const CommandLine::CommandInfo Info;
 
-enum class Subcommand {
-#define CARBON_SUBCOMMAND(Name, ...) Name,
-#include "toolchain/driver/flags.def"
-  Unknown,
+  auto Build(CommandLine::CommandBuilder& b) -> void;
+
+  bool verbose = false;
+  bool fuzzing = false;
+  bool include_diagnostic_kind = false;
+
+  ClangSubcommand clang;
+  CompileSubcommand compile;
+  FormatSubcommand format;
+  LanguageServerSubcommand language_server;
+  LinkSubcommand link;
+  LldSubcommand lld;
+
+  // On success, this is set to the subcommand to run.
+  DriverSubcommand* selected_subcommand = nullptr;
 };
-
-auto GetSubcommand(llvm::StringRef name) -> Subcommand {
-  return llvm::StringSwitch<Subcommand>(name)
-#define CARBON_SUBCOMMAND(Name, Spelling, ...) .Case(Spelling, Subcommand::Name)
-#include "toolchain/driver/flags.def"
-      .Default(Subcommand::Unknown);
-}
-
 }  // namespace
 
-auto Driver::RunFullCommand(llvm::ArrayRef<llvm::StringRef> args) -> bool {
-  if (args.empty()) {
-    error_stream_ << "ERROR: No subcommand specified.\n";
-    return false;
-  }
+// Note that this is not constexpr so that it can include information generated
+// in separate translation units and potentially overridden at link time in the
+// version string.
+const CommandLine::CommandInfo Options::Info = {
+    .name = "carbon",
+    .version = Version::ToolchainInfo,
+    .help = R"""(
+This is the unified Carbon Language toolchain driver. Its subcommands provide
+all of the core behavior of the toolchain, including compilation, linking, and
+developer tools. Each of these has its own subcommand, and you can pass a
+specific subcommand to the `help` subcommand to get details about its usage.
+)""",
+    .help_epilogue = R"""(
+For questions, issues, or bug reports, please use our GitHub project:
 
-  llvm::StringRef subcommand_text = args[0];
-  llvm::SmallVector<llvm::StringRef, 16> subcommand_args(
-      std::next(args.begin()), args.end());
+  https://github.com/carbon-language/carbon-lang
+)""",
+};
 
-  DiagnosticConsumer* consumer = &ConsoleDiagnosticConsumer();
-  std::unique_ptr<SortingDiagnosticConsumer> sorting_consumer;
-  // TODO: Figure out command-line support (llvm::cl?), this is temporary.
-  if (!subcommand_args.empty() &&
-      subcommand_args[0] == "--print-errors=streamed") {
-    subcommand_args.erase(subcommand_args.begin());
-  } else {
-    sorting_consumer = std::make_unique<SortingDiagnosticConsumer>(*consumer);
-    consumer = sorting_consumer.get();
-  }
-  switch (GetSubcommand(subcommand_text)) {
-    case Subcommand::Unknown:
-      error_stream_ << "ERROR: Unknown subcommand '" << subcommand_text
-                    << "'.\n";
-      return false;
+auto Options::Build(CommandLine::CommandBuilder& b) -> void {
+  b.AddFlag(
+      {
+          .name = "verbose",
+          .short_name = "v",
+          .help = "Enable verbose logging to the stderr stream.",
+      },
+      [&](CommandLine::FlagBuilder& arg_b) { arg_b.Set(&verbose); });
 
-#define CARBON_SUBCOMMAND(Name, ...) \
-  case Subcommand::Name:             \
-    return Run##Name##Subcommand(*consumer, subcommand_args);
-#include "toolchain/driver/flags.def"
-  }
-  llvm_unreachable("All subcommands handled!");
+  b.AddFlag(
+      {
+          .name = "fuzzing",
+          .help = "Configure the command line for fuzzing.",
+      },
+      [&](CommandLine::FlagBuilder& arg_b) { arg_b.Set(&fuzzing); });
+
+  b.AddFlag(
+      {
+          .name = "include-diagnostic-kind",
+          .help = R"""(
+When printing diagnostics, include the diagnostic kind as part of output. This
+applies to each message that forms a diagnostic, not just the primary message.
+)""",
+      },
+      [&](auto& arg_b) { arg_b.Set(&include_diagnostic_kind); });
+
+  clang.AddTo(b, &selected_subcommand);
+  compile.AddTo(b, &selected_subcommand);
+  format.AddTo(b, &selected_subcommand);
+  language_server.AddTo(b, &selected_subcommand);
+  link.AddTo(b, &selected_subcommand);
+  lld.AddTo(b, &selected_subcommand);
+
+  b.RequiresSubcommand();
 }
 
-auto Driver::RunHelpSubcommand(DiagnosticConsumer& /*consumer*/,
-                               llvm::ArrayRef<llvm::StringRef> args) -> bool {
-  // TODO: We should support getting detailed help on a subcommand by looking
-  // for it as a positional parameter here.
-  if (!args.empty()) {
-    ReportExtraArgs("help", args);
-    return false;
+auto Driver::RunCommand(llvm::ArrayRef<llvm::StringRef> args) -> DriverResult {
+  if (driver_env_.installation->error()) {
+    CARBON_DIAGNOSTIC(DriverInstallInvalid, Error, "{0}", std::string);
+    driver_env_.emitter.Emit(DriverInstallInvalid,
+                             driver_env_.installation->error()->str());
+    return {.success = false};
   }
 
-  output_stream_ << "List of subcommands:\n\n";
+  Options options;
 
-  constexpr llvm::StringLiteral SubcommandsAndHelp[][2] = {
-#define CARBON_SUBCOMMAND(Name, Spelling, HelpText) {Spelling, HelpText},
-#include "toolchain/driver/flags.def"
-  };
+  ErrorOr<CommandLine::ParseResult> result = CommandLine::Parse(
+      args, *driver_env_.output_stream, Options::Info,
+      [&](CommandLine::CommandBuilder& b) { options.Build(b); });
 
-  int max_subcommand_width = 0;
-  for (auto subcommand_and_help : SubcommandsAndHelp) {
-    max_subcommand_width = std::max(
-        max_subcommand_width, static_cast<int>(subcommand_and_help[0].size()));
+  // Regardless of whether the parse succeeded, try to use the diagnostic kind
+  // flag.
+  driver_env_.consumer.set_include_diagnostic_kind(
+      options.include_diagnostic_kind);
+
+  if (!result.ok()) {
+    CARBON_DIAGNOSTIC(DriverCommandLineParseFailed, Error, "{0}", std::string);
+    driver_env_.emitter.Emit(DriverCommandLineParseFailed,
+                             PrintToString(result.error()));
+    return {.success = false};
+  } else if (*result == CommandLine::ParseResult::MetaSuccess) {
+    return {.success = true};
   }
 
-  for (auto subcommand_and_help : SubcommandsAndHelp) {
-    llvm::StringRef subcommand_text = subcommand_and_help[0];
-    // TODO: We should wrap this to the number of columns left after the
-    // subcommand on the terminal, and using a hanging indent.
-    llvm::StringRef help_text = subcommand_and_help[1];
-    output_stream_ << "  "
-                   << llvm::left_justify(subcommand_text, max_subcommand_width)
-                   << " - " << help_text << "\n";
+  if (options.verbose) {
+    // Note this implies streamed output in order to interleave.
+    driver_env_.vlog_stream = driver_env_.error_stream;
+  }
+  if (options.fuzzing) {
+    driver_env_.fuzzing = true;
   }
 
-  output_stream_ << "\n";
-  return true;
-}
-
-auto Driver::RunDumpTokensSubcommand(DiagnosticConsumer& consumer,
-                                     llvm::ArrayRef<llvm::StringRef> args)
-    -> bool {
-  if (args.empty()) {
-    error_stream_ << "ERROR: No input file specified.\n";
-    return false;
-  }
-
-  llvm::StringRef input_file_name = args.front();
-  args = args.drop_front();
-  if (!args.empty()) {
-    ReportExtraArgs("dump-tokens", args);
-    return false;
-  }
-
-  auto source = SourceBuffer::CreateFromFile(input_file_name);
-  if (!source) {
-    error_stream_ << "ERROR: Unable to open input source file: ";
-    llvm::handleAllErrors(source.takeError(),
-                          [&](const llvm::ErrorInfoBase& ei) {
-                            ei.log(error_stream_);
-                            error_stream_ << "\n";
-                          });
-    return false;
-  }
-  auto tokenized_source = TokenizedBuffer::Lex(*source, consumer);
-  consumer.Flush();
-  tokenized_source.Print(output_stream_);
-  return !tokenized_source.has_errors();
-}
-
-auto Driver::RunDumpParseTreeSubcommand(DiagnosticConsumer& consumer,
-                                        llvm::ArrayRef<llvm::StringRef> args)
-    -> bool {
-  if (args.empty()) {
-    error_stream_ << "ERROR: No input file specified.\n";
-    return false;
-  }
-
-  llvm::StringRef input_file_name = args.front();
-  args = args.drop_front();
-  if (!args.empty()) {
-    ReportExtraArgs("dump-parse-tree", args);
-    return false;
-  }
-
-  auto source = SourceBuffer::CreateFromFile(input_file_name);
-  if (!source) {
-    error_stream_ << "ERROR: Unable to open input source file: ";
-    llvm::handleAllErrors(source.takeError(),
-                          [&](const llvm::ErrorInfoBase& ei) {
-                            ei.log(error_stream_);
-                            error_stream_ << "\n";
-                          });
-    return false;
-  }
-  auto tokenized_source = TokenizedBuffer::Lex(*source, consumer);
-  auto parse_tree = ParseTree::Parse(tokenized_source, consumer);
-  consumer.Flush();
-  parse_tree.Print(output_stream_);
-  return !tokenized_source.has_errors() && !parse_tree.has_errors();
-}
-
-auto Driver::ReportExtraArgs(llvm::StringRef subcommand_text,
-                             llvm::ArrayRef<llvm::StringRef> args) -> void {
-  error_stream_ << "ERROR: Unexpected additional arguments to the '"
-                << subcommand_text << "' subcommand:";
-  for (auto arg : args) {
-    error_stream_ << " " << arg;
-  }
-
-  error_stream_ << "\n";
+  CARBON_CHECK(options.selected_subcommand != nullptr);
+  return options.selected_subcommand->Run(driver_env_);
 }
 
 }  // namespace Carbon

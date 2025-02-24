@@ -10,182 +10,123 @@ SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 
 ## Table of contents
 
--   [Objective for 2022: make Carbon public, finish 0.1 language](#objective-for-2022-make-carbon-public-finish-01-language)
-    -   [Completing the language design](#completing-the-language-design)
-    -   [Going public](#going-public)
--   [Key results in 2022](#key-results-in-2022)
-    -   [Broaden participation so no organization is >50%](#broaden-participation-so-no-organization-is-50)
-    -   [Example ports of C++ libraries to Carbon (100% of woff2, 99% of RE2)](#example-ports-of-c-libraries-to-carbon-100-of-woff2-99-of-re2)
-        -   [Language design covers the syntax and semantics of the example port code.](#language-design-covers-the-syntax-and-semantics-of-the-example-port-code)
-    -   [Demo implementation of core features with working examples](#demo-implementation-of-core-features-with-working-examples)
-    -   [Carbon explorer implementation of core features with test cases](#carbon-explorer-implementation-of-core-features-with-test-cases)
--   [Beyond 2022](#beyond-2022)
-    -   [Potential 2023 goals: finish 0.2 language, stop experimenting](#potential-2023-goals-finish-02-language-stop-experimenting)
-    -   [Potential 2024-2025 goals: _ship_ 1.0 language & organization](#potential-2024-2025-goals-ship-10-language--organization)
+-   [Objectives for 2025: demo of C++ interop and design of memory safety](#objectives-for-2025-demo-of-c-interop-and-design-of-memory-safety)
+-   [Key results in 2025](#key-results-in-2025)
+    -   [Access most non-template C++ APIs in Carbon](#access-most-non-template-c-apis-in-carbon)
+    -   [Access non-generic Carbon APIs in C++](#access-non-generic-carbon-apis-in-c)
+    -   [Detailed safety strategy update, including expected tradeoffs and prioritization](#detailed-safety-strategy-update-including-expected-tradeoffs-and-prioritization)
+    -   [Design for compile-time temporal and mutation memory safety](#design-for-compile-time-temporal-and-mutation-memory-safety)
+    -   [Give talks at 2-3 conferences about Carbon topics, expanding our audience](#give-talks-at-2-3-conferences-about-carbon-topics-expanding-our-audience)
+-   [Beyond 2025](#beyond-2025)
+    -   [Potential 2026 goals: ship a working 0.1 language for evaluation](#potential-2026-goals-ship-a-working-01-language-for-evaluation)
+    -   [Potential 2027-2028 goals: finish 0.2 language, stop experimenting](#potential-2027-2028-goals-finish-02-language-stop-experimenting)
+    -   [Potential goals _beyond_ 2028: ship 1.0 language & organization](#potential-goals-beyond-2028-ship-10-language--organization)
 
 <!-- tocstop -->
 
-## Objective for 2022: make Carbon public, finish 0.1 language
+## Objectives for 2025: demo of C++ interop and design of memory safety
 
-We have two primary goals for 2022:
+We have two areas of focus for 2025:
 
--   Shift the experiment to being public.
--   Reach the point where the core language design is substantially complete.
+1. Get a major chunk of our C++ interop working to the point where we can
+   demonstrate it in realistic scenarios.
+2. Build a concrete and specific design for memory safety in Carbon.
 
-### Completing the language design
+We will scope the first one to non-template C++ APIs, and prioritize accessing
+C++ APIs from Carbon. This still will require major progress on the
+implementation of all the relevant Carbon features, and even design in some
+cases.
 
-By the end of 2022, the core Carbon language design should be substantially
-complete, including designs for expressions and statements, classes, generics
-and templates, core built-in types and interfaces such as integers and pointers,
-and interoperability with C++. The design choices made to reach this point are
-expected to be experimental, and many of them may need revisiting before we
-reach 1.0, but the broad shape of the language should be clear at this point,
-and it should be possible to write non-trivial Carbon programs.
+The second is focused on moving from a vague direction of "we will have a memory
+safe dialect of Carbon that is a reasonable default", to a specific and concrete
+design. We want to be able to illustrate exactly what it will look like to
+migrate existing unsafe C++ to Carbon (possibly at large scale), and then begin
+incrementally adopting and integrating memory safety into that otherwise unsafe
+Carbon codebase.
 
-An initial rough framework for the core standard library functionality should be
-provided, as necessary to support the core language components. A largely
-complete implementation of the core language design should be available in
-Carbon explorer. The toolchain should be able to parse the core language design,
-with some support for name lookup and type-checking.
+Achieving these should dramatically reduce the risk around Carbon, especially in
+environments where memory safety is increasingly a necessary part of any future
+software development plans. They will also move the project much closer to our
+0.1 milestone.
 
-We should have begun writing non-trivial portions of the standard library, such
-as common higher-level data structures and algorithms.
+## Key results in 2025
 
-### Going public
+### Access most non-template C++ APIs in Carbon
 
-At some point in 2022 we should shift the experiment to be public. This will
-allow us to significantly expand both those directly involved and contributing
-to Carbon but also those able to evaluate and give us feedback.
+Beyond excluding templates, this excludes coroutines, and any aspects that
+require accessing Carbon types in C++ such as templates with Carbon types as
+template arguments.
 
-We don't expect Carbon to shift away from an experiment until after it becomes
-public and after we have been able to collect and incorporate a reasonable
-amount of feedback from the broader industry and community. This feedback will
-be central in determining whether Carbon should continue past the experimental
-stage.
+This result includes both the implementation in the toolchain and the underlying
+design underpinning this implementation. It also includes implementation and
+design work on necessary Carbon language features that underpin the interop
+provided.
 
-## Key results in 2022
+### Access non-generic Carbon APIs in C++
 
-There are several milestones that we believe are on the critical path to
-successfully achieving our main goal for the year, and point to concrete areas
-of focus for the project.
+This excludes generics to make the scope more tractable, but this remains a bit
+of a stretch goal for 2025, and how much progress we make will depend on how
+many unexpected difficulties we encounter getting the other direction to work,
+and any other delays.
 
-### Broaden participation so no organization is >50%
+### Detailed safety strategy update, including expected tradeoffs and prioritization
 
-Our goal is that no single organization makes up >50% of participation in the
-Carbon project, to ensure that we are including as broad and representative a
-set of perspectives in the evolution of Carbon as possible.
+We haven't been focused on the safe side of Carbon for several years and will
+need to refresh our safety strategy to reflect the current plan, as well as
+expanding and making it more detailed to support building our initial memory
+safety design.
 
-As a proxy for the amount of participation, we will count the number of active
-participants from each organization in 2022, with the aim that each organization
-is represented by less than 50% of all active participants.
+### Design for compile-time temporal and mutation memory safety
 
-There are many ways in which someone could be an active participant, and when
-the leads come to reflect on this at the end of the year, we expect this to be a
-judgment call. We will consider at least the following when measuring our
-success on this objective:
+We expect our memory safety story for temporal memory safety to at the highest
+level follow the direction of Rust, using the type system to ensure compile-time
+guarantees of safety without the runtime overhead of garbage collection or
+reference counting. We want our design here to cover both temporal and mutation
+safety. While the exact level of safety and the tradeoffs we're willing to
+accept will be part of updating our safety strategy, at a fundamental level we
+need to fully address the security requirements on memory safety, much like
+other modern languages including Swift, Kotlin, Go, or Rust. A significantly
+lower security bar won't be acceptable for the expected users of safe Carbon.
 
--   Pull requests authored and reviewed, including proposals, code changes, and
-    documentation changes.
--   Contribution to discussions, including Discord, teleconferences, and GitHub
-    issues.
+### Give talks at 2-3 conferences about Carbon topics, expanding our audience
 
-### Example ports of C++ libraries to Carbon (100% of [woff2](https://github.com/google/woff2), 99% of [RE2](https://github.com/google/re2))
+Beyond continuing to share details about Carbon with the open source and C++
+communities, we also want to expand our audience reach in 2025. We want to give
+talks at a conference in the Asia/Pacific region, and at a conference in the
+broader open source world beyond LLVM and C++ specific conferences.
 
-The first part of this result is that all of the woff2 library is ported to
-Carbon in a way that exports the same C++ API. There should be no gaps in this
-port given that woff2 has a very simple C++ API and uses few C++ language
-features.
-
-RE2 is a larger library using significantly more language features. For that
-part of the result, fewer than 1% of its C++ lines of code should be missing a
-semantically meaningful port into Carbon code.
-
-An important nuance of this goal is that it doesn't include building a complete
-Carbon standard library beyond the most basic necessary types. The intent is to
-exercise and show the interoperability layers of Carbon by re-using the C++
-standard library in many cases and exporting a compatible C++ API to both woff2
-and RE2's current API.
-
-While this key result isn't directly tied to the main objective, we believe it
-represents a critical milestone for being able to achieve this objective. It
-both measures our progress solidifying Carbon's design and demonstrating the
-value proposition of Carbon.
-
-Note that both woff2 and RE2 libraries are chosen somewhat arbitrarily and could
-easily be replaced with a different, more effective libraries to achieve the
-fundamental result of demonstrating a compelling body of cohesive design and the
-overarching value proposition.
-
-#### Language design covers the syntax and semantics of the example port code.
-
-We should have a clear understanding of the syntax and semantics used by these
-example ports. We should be able to demonstrate that self-contained portions of
-the ported code work correctly using Carbon explorer.
-
-### Demo implementation of core features with working examples
-
-A core set of Carbon features should be implemented sufficiently to build
-working examples of those features and run them successfully. These features
-could include:
-
--   User-defined types, functions, namespaces, packages, and importing.
--   Basic generic functions and types using interfaces.
--   Initial/simple implementation of safety checking including at least bounds
-    checking, simple lifetime checking, and simple initialization checking.
--   Sum types sufficient for optional-types to model nullable pointers.
--   Pattern matching sufficient for basic function overloading on types and
-    arity, as well as unwrapping of optional types for guard statements.
-
-Stretch goals if we can hit the above:
-
--   Instantiating a basic C++ template through interop layer for use within
-    Carbon.
-
-The demo implementation should also provide demos outside of specific language
-features including:
-
--   Basic benchmarking of the different phases of compilation (lexing, parsing,
-    etc).
--   A basic REPL command line.
-
-Stretch goals if we can hit the above:
-
--   Automatic code formatter on top of the implementation infrastructure.
--   A [compiler explorer](https://compiler-explorer.com/) fork with REPL
-    integrated.
-
-Benchmarking at this stage isn't expected to include extensive optimization.
-Instead, it should focus on letting us track large/high-level impact on
-different phases as they are developed or features are added. They may also help
-illustrate initial high-level performance characteristics of the implementation,
-but the long term focus should be on end-to-end user metrics.
-
-Automatic code formatting could be achieved many ways, but it seems useful to
-ensure the language and implementation both support use cases like formatting.
-
-### Carbon explorer implementation of core features with test cases
-
-This should include both a human readable rendering of the formal semantics as
-well as an execution environment to run test cases through those semantics. The
-implementation should cover enough of the core language that example code, such
-as the above ports of woff2 and RE2 and the Carbon standard library, can be
-verified with Carbon explorer.
-
-## Beyond 2022
+## Beyond 2025
 
 Longer term goals are hard to pin down and always subject to change, but we want
 to give an idea of what kinds of things are expected at a high level further out
-in order to illustrate how the goals and priorities we have in 2022 feed into
+in order to illustrate how the goals and priorities we have in 2025 feed into
 subsequent years.
 
-### Potential 2023 goals: finish 0.2 language, stop experimenting
+### Potential 2026 goals: ship a working [0.1 language] for evaluation
+
+[0.1 language]:
+    /docs/project/milestones.md#milestone-01-a-minimum-viable-product-mvp-for-evaluation
+
+Because we are adding a design for memory safety to our 0.1 milestone, we are
+also expecting to push it out by at least a year. Shipping 0.1 in 2026 will be a
+very ambitious goal and may not be possible, but the end of 2026 is now the
+_soonest_ that 0.1 could realistically be ready to ship.
+
+We expect that once we reach this milestone the community will be able to start
+realistically evaluating Carbon as a C++ successor language. Of course, this
+evaluation will take some time.
+
+### Potential 2027-2028 goals: finish [0.2 language], stop experimenting
+
+[0.2 language]:
+    /docs/project/milestones.md#milestone-02-feature-complete-product-for-evaluation
 
 Once Carbon is moving quickly and getting public feedback, we should be able to
 conclude the experiment. We should know if this is the right direction for
 moving C++ forward for a large enough portion of the industry and community, and
 whether the value proposition of this direction outweighs the cost.
 
-However, there will still be a _lot_ of work to make Carbon into a production
+However, there will still be a lot of work left to make Carbon into a production
 quality language, even if the experiment concludes successfully.
 
 Some concrete goals that might show up in this time frame:
@@ -201,15 +142,18 @@ Some concrete goals that might show up in this time frame:
 -   Create a foundation or similar organization to manage the Carbon project,
     separate from any corporate entities that fund work on Carbon.
 
-### Potential 2024-2025 goals: _ship_ 1.0 language & organization
+### Potential goals _beyond_ 2028: ship [1.0 language] & organization
 
-A major milestone will be the first version of a production language. We should
-also have finished transferring all governance of Carbon to an independent open
+[1.0 language]:
+    /docs/project/milestones.md#milestone-10-no-longer-an-experiment-usable-in-production
+
+A major milestone will be the first version of a production language. We also
+plan to finish transferring all governance of Carbon to an independent open
 source organization at that point. However, we won't know what a more realistic
 or clear schedule for these milestones will be until we get closer.
 
-Another important aspect of our goals in this time frame is expanding them to
-encompass the broader ecosystem of the language:
+Goals in this time frame will expand to encompass the broader ecosystem of the
+language:
 
 -   End-to-end developer tooling and experience.
 -   Teaching and training material.
