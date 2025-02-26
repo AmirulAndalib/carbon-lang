@@ -11,7 +11,7 @@ SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 import os
 import unittest
 
-from carbon.proposals.scripts import new_proposal
+from proposals.scripts import new_proposal
 
 
 class TestNewProposal(unittest.TestCase):
@@ -49,6 +49,9 @@ class TestNewProposal(unittest.TestCase):
             "[Pull request](https://github.com/carbon-language/carbon-lang/"
             "pull/123)" in content,
             content,
+        )
+        self.assertTrue(
+            "<!-- tocstop -->\n\n## Abstract\n\n" in content, content
         )
 
     def test_run_success(self):
