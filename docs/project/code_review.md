@@ -18,6 +18,7 @@ SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
     -   [Write good change descriptions](#write-good-change-descriptions)
         -   [First line](#first-line)
         -   [Body](#body)
+        -   [Pull request labels](#pull-request-labels)
     -   [Make small changes](#make-small-changes)
     -   [Responding to review comments](#responding-to-review-comments)
         -   [Responding to questions or confusion](#responding-to-questions-or-confusion)
@@ -62,7 +63,7 @@ in line with accepted designs. It may in some rare cases extend to exploring
 experimental or prototype directions whose design is under active consideration.
 
 The term "code review" in the Carbon project is not only about "code". We expect
-changes to any files to be reviewed, including documentation and any other
+changes to any file to be reviewed, including documentation and any other
 material stored in the repository.
 
 ## Who should review?
@@ -85,11 +86,11 @@ In Carbon, developers will focus on particular areas, loosely broken down as:
     -   We split out auto-assignment by explorer, toolchain, and other files
         (including documentation).
 
-[Auto-assignment](/.github/workflows/assign_prs.yaml) will help find owners, but
-won't always be perfect -- developers may take a PR they weren't auto-assigned
-in order to help review go quickly. Contributors can also request multiple
-reviewers, but it can be daunting to get feedback from a large number of
-reviewers, so we suggest keeping the number of reviewers reasonably small.
+[Auto-assignment](/.github/workflows/auto_assign_prs.yaml) will help find
+owners, but won't always be perfect -- developers may take a PR they weren't
+auto-assigned in order to help review go quickly. Contributors can also request
+multiple reviewers, but it can be daunting to get feedback from a large number
+of reviewers, so we suggest keeping the number of reviewers reasonably small.
 
 Any reviews that explicitly request changes should be addressed, either with the
 changes or an explanation of why not, before a pull request is merged. Further,
@@ -193,6 +194,22 @@ in order to be effective. Also consider what information someone else will need
 a year in the future when doing archaeology on the codebase and they come across
 your change without any context.
 
+#### Pull request labels
+
+GitHub labels are used on PRs, such as
+[toolchain](https://github.com/carbon-language/carbon-lang/labels/toolchain).
+These are automatically added based on affected directories.
+
+We do not put labels in PR descriptions; for example, we would write
+`Implements type deduction` instead of `[feature] Type deduction`, or
+`Fix crash in function imports` instead of `[bug] Crash in function imports`.
+
+Given the current size and state of Carbon, we believe the `[feature]`-style PR
+labeling would add too much process for their benefit. Additionally, in contrast
+with LLVM's
+[`[NFC]` label policies](https://llvm.org/docs/DeveloperPolicy.html#obtaining-commit-access),
+Carbon changes are always reviewed prior to commit.
+
 ### Make small changes
 
 Small changes have many benefits:
@@ -215,11 +232,6 @@ series of changes so they understand the big picture, but that will only go so
 far. It is still possible to shrink a change so much that it becomes nonsensical
 in isolation. For example, a change without appropriate tests is not
 self-contained.
-
-You may want to use a set of
-[stacked pull requests](pull_request_workflow.md#stacking-dependent-pull-requests)
-rather than a single, larger pull request in order to keep changes easy to
-review.
 
 ### Responding to review comments
 
@@ -247,6 +259,21 @@ it if needed.
 For non-optional comments, this section provides several suggestions on how best
 to make progress. If none of these work, you may need to
 [resolve an impasse or conflict](#resolving-an-impasse-or-conflict).
+
+In response to suggestions, update the files in the pull request in new commits.
+Rebasing, squashing, or force-pushing commits can break GitHub's comment
+associations, and it makes it harder to determine what's changed since the last
+review. With regular pushes, GitHub can show individual deltas, giving
+additional flexibility to the reviewer. We squash pull requests when we merge
+them, so the end result is the same.
+
+It is good to reply to every comment so that the reviewer knows you saw them.
+Best practice is to send the reply to all of the comments at once, after the
+files in the pull request have been updated. If there are a lot of replies, it
+can be helpful to include a message saying whether the pull request is now ready
+for another round of review, or press the "Re-request review" button to the
+right of the reviewer's name:
+![The re-request review button on GitHub](https://user-images.githubusercontent.com/711534/189789784-fcf18d1b-137b-48ba-959a-0d05cee36c2d.png)
 
 #### Responding to questions or confusion
 
