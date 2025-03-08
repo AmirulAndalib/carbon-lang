@@ -121,11 +121,11 @@ fn Add(a: i64, b: i64) -> i64 {
 
 The corresponding definition may be provided later in the same file or, when the
 declaration is in an
-[`api` file of a library](code_and_name_organization/#libraries), in the `impl`
-file of the same library. The signature of a function declaration must match the
-corresponding definition. This includes the [return clause](#return-clause);
-even though an omitted return type has equivalent behavior to `-> ()`, the
-presence or omission must match.
+[API file of a library](code_and_name_organization/#libraries), in an
+implementation file of the same library. The signature of a function declaration
+must match the corresponding definition. This includes the
+[return clause](#return-clause); even though an omitted return type has
+equivalent behavior to `-> ()`, the presence or omission must match.
 
 ## Function calls
 
@@ -151,14 +151,14 @@ the `a` and `b` parameters of `Add`.
 Other designs build upon basic function syntax to add advanced features:
 
 -   [Generic functions](generics/overview.md#generic-functions) adds support for
-    deduced parameters and generic type parameters.
+    deduced parameters and compile-time parameters.
 -   [Class member functions](classes.md#member-functions) adds support for
     methods and class functions.
 
 ## Alternatives considered
 
 -   [Function keyword](/proposals/p0438.md#function-keyword)
--   [Only allow `auto` return types if parameters are generic](/proposals/p0826.md#only-allow-auto-return-types-if-parameters-are-generic)
+-   [Only allow `auto` return types if parameters are compile-time](/proposals/p0826.md#only-allow-auto-return-types-if-parameters-are-generic)
 -   [Provide alternate function syntax for concise return type inference](/proposals/p0826.md#provide-alternate-function-syntax-for-concise-return-type-inference)
 -   [Allow separate declaration and definition](/proposals/p0826.md#allow-separate-declaration-and-definition)
 

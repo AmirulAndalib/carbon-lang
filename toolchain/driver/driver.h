@@ -5,13 +5,11 @@
 #ifndef CARBON_TOOLCHAIN_DRIVER_DRIVER_H_
 #define CARBON_TOOLCHAIN_DRIVER_DRIVER_H_
 
-#include <cstdint>
-
+#include "common/command_line.h"
 #include "llvm/ADT/ArrayRef.h"
 #include "llvm/ADT/StringRef.h"
-#include "llvm/Support/Debug.h"
-#include "llvm/Support/raw_ostream.h"
-#include "toolchain/diagnostics/diagnostic_emitter.h"
+#include "toolchain/driver/driver_env.h"
+#include "toolchain/driver/driver_subcommand.h"
 
 namespace Carbon {
 
@@ -22,14 +20,15 @@ namespace Carbon {
 // with the language.
 class Driver {
  public:
-  // Default constructed driver uses stderr for all error and informational
-  // output.
-  Driver() : output_stream_(llvm::outs()), error_stream_(llvm::errs()) {}
-
-  // Constructs a driver with any error or informational output directed to a
-  // specified stream.
-  Driver(llvm::raw_ostream& output_stream, llvm::raw_ostream& error_stream)
-      : output_stream_(output_stream), error_stream_(error_stream) {}
+  // Constructs a driver with the provided environment. `input_stream` is
+  // optional; other parameters are required.
+  explicit Driver(llvm::IntrusiveRefCntPtr<llvm::vfs::FileSystem> fs,
+                  const InstallPaths* installation, FILE* input_stream,
+                  llvm::raw_pwrite_stream* output_stream,
+                  llvm::raw_pwrite_stream* error_stream, bool fuzzing = false,
+                  bool enable_leaking = false)
+      : driver_env_(std::move(fs), installation, input_stream, output_stream,
+                    error_stream, fuzzing, enable_leaking) {}
 
   // Parses the given arguments into both a subcommand to select the operation
   // to perform and any arguments to that subcommand.
@@ -37,46 +36,10 @@ class Driver {
   // Returns true if the operation succeeds. If the operation fails, returns
   // false and any information about the failure is printed to the registered
   // error stream (stderr by default).
-  auto RunFullCommand(llvm::ArrayRef<llvm::StringRef> args) -> bool;
-
-  // Subcommand that prints available help text to the error stream.
-  //
-  // Optionally one positional parameter may be provided to select a particular
-  // subcommand or detailed section of help to print.
-  //
-  // Returns true if appropriate help text was found and printed. If an invalid
-  // positional parameter (or flag) is provided, returns false.
-  auto RunHelpSubcommand(DiagnosticConsumer& consumer,
-                         llvm::ArrayRef<llvm::StringRef> args) -> bool;
-
-  // Subcommand that dumps the token information for the provided source file.
-  //
-  // Requires exactly one positional parameter to designate the source file to
-  // read. May be `-` to read from stdin.
-  //
-  // Returns true if the operation succeeds. If the operation fails, this
-  // returns false and any information about the failure is printed to the
-  // registered error stream (stderr by default).
-  auto RunDumpTokensSubcommand(DiagnosticConsumer& consumer,
-                               llvm::ArrayRef<llvm::StringRef> args) -> bool;
-
-  // Subcommand that dumps the parse tree for the provided source file.
-  //
-  // Requires exactly one positional parameter to designate the source file to
-  // read. May be `-` to read from stdin.
-  //
-  // Returns true if the operation succeeds. If the operation fails, this
-  // returns false and any information about the failure is printed to the
-  // registered error stream (stderr by default).
-  auto RunDumpParseTreeSubcommand(DiagnosticConsumer& consumer,
-                                  llvm::ArrayRef<llvm::StringRef> args) -> bool;
+  auto RunCommand(llvm::ArrayRef<llvm::StringRef> args) -> DriverResult;
 
  private:
-  auto ReportExtraArgs(llvm::StringRef subcommand_text,
-                       llvm::ArrayRef<llvm::StringRef> args) -> void;
-
-  llvm::raw_ostream& output_stream_;
-  llvm::raw_ostream& error_stream_;
+  DriverEnv driver_env_;
 };
 
 }  // namespace Carbon

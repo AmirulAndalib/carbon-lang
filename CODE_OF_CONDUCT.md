@@ -34,7 +34,7 @@ that we ask all community members to adhere to:
 -   be considerate,
 -   be kind,
 -   be careful in the words that we choose,
--   when we disagree, we try to understand why, and
+-   when we disagree, try to understand why, and
 -   recognize when progress has stopped, and take a step back.
 
 This list isn't exhaustive. Rather, take it in the spirit in which it’s intended
@@ -145,39 +145,29 @@ any member of the conduct team directly.
 
 ## Conduct team
 
-At present, the [Carbon leads](docs/project/evolution.md#carbon-leads-1) will
-serve as the conduct team. We expect to establish a dedicated conduct team if
-and when the project grows, along with more communication systems for reports.
+The conduct team can be emailed at conduct@carbon-lang.dev.
 
-The conduct team can be emailed at carbon-lang-conduct@googlegroups.com, and
-currently has the following members:
-
--   Chandler Carruth (@chandlerc on Discord and
-    [GitHub](https://github.com/chandlerc))
--   Kate Gregory (@KateGregory on Discord and
-    [GitHub](https://github.com/KateGregory))
--   Richard Smith (@zygoloid on Discord and
-    [GitHub](https://github.com/zygoloid))
-
-If the composition of the code of conduct team changes, reports will not be
-shared with new members without the permission of the reporter.
+More details about the team, its current members and its management are on the
+[conduct team page](/docs/project/teams/conduct_team.md).
 
 ### Reporting conduct
 
 If you believe someone is violating the code of conduct, you can report it
 several ways, including:
 
--   Asking for help on
-    [#community-help](https://discord.com/channels/655572317891461132/996113200464543804).
-    An available moderator will respond privately.
-    -   If you want to privately ask for moderator assistance, direct message a
-        moderator on Discord. Look under the Moderator list for logged in
-        moderators, and click on a moderator's name to send a message.
+-   On [Discord](https://discord.gg/ZjVdShJDAs), DM ModMail. It may require
+    confirmation that you want help on the Carbon Language server. An available
+    moderator will respond.
+    -   Look for ModMail in the user list under "Bots", and click the name to
+        send a direct message.
+    -   Moderators can also be found and messaged similarly, but ModMail is
+        preferred.
 -   Emailing the [conduct team](#conduct-team) directly at
-    carbon-lang-conduct@googlegroups.com. Bear in mind that
+    conduct@carbon-lang.dev. Bear in mind that
     [responses may take time](#what-happens-after-contacting-the-conduct-team).
 
-**All reports will be kept confidential.**
+**All reports will be kept confidential**, and are only used by the conduct team
+to address conduct issues and keep the Carbon community safe and inclusive.
 
 Please send reports concerning a member of the conduct team directly to other
 members of the conduct team. This allows discussion of the complaint to more
@@ -208,7 +198,7 @@ comfortable, please consider including:
 -   Your account of what occurred, including any private chat logs or email.
 -   Links for any public records, including community discussions.
 -   Any extra context for the incident.
--   If you believe this incident is ongoing.
+-   Whether you believe this incident is ongoing.
 -   Any other information you believe we should have.
 
 ### What happens after contacting the conduct team?
@@ -256,9 +246,6 @@ confidential unless instructed otherwise by those individuals.
 
 ### Appealing
 
-**Note:** The process described in this section will become available when we
-have a dedicated conduct team that's separate from the Carbon leads.
-
 Only permanent resolutions, such as bans, or requests for public actions may be
 appealed. To appeal a decision of the conduct team, contact the
 [Carbon leads](docs/project/evolution.md#carbon-leads-1) with your appeal and
@@ -302,9 +289,9 @@ involved:
     -   **Behavior:** A code of conduct violation through a single moderate
         incident, or a series of minor violations.
     -   **Action:** In addition to the correction action, a temporary
-        restriction barring interaction with the people involved for a specified
-        period of time, including unsolicited interaction with the conduct team.
-        Violating these terms may lead to a ban.
+        restriction forbidding interaction with the people involved for a
+        specified period of time, including unsolicited interaction with the
+        conduct team. Violating these terms may lead to a ban.
 1.  **Temporary ban**
     -   **Behavior:** A serious violation of the code of conduct, including
         sustained inappropriate behavior.

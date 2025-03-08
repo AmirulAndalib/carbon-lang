@@ -2,17 +2,29 @@
 // Exceptions. See /LICENSE for license information.
 // SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 
-#include <cstdint>
 #include <cstring>
-#include <numeric>
 #include <string>
 
+#include "common/exe_path.h"
+#include "common/raw_string_ostream.h"
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/ADT/StringRef.h"
 #include "llvm/Support/raw_ostream.h"
+#include "testing/fuzzing/libfuzzer.h"
 #include "toolchain/driver/driver.h"
+#include "toolchain/install/install_paths.h"
 
 namespace Carbon::Testing {
+
+static const InstallPaths* install_paths = nullptr;
+
+// NOLINTNEXTLINE(readability-non-const-parameter): External API required types.
+extern "C" auto LLVMFuzzerInitialize(int* argc, char*** argv) -> int {
+  CARBON_CHECK(*argc >= 1, "Need the `argv[0]` value to initialize!");
+  install_paths = new InstallPaths(
+      InstallPaths::MakeForBazelRunfiles(FindExecutablePath((*argv)[0])));
+  return 0;
+}
 
 static auto Read(const unsigned char*& data, size_t& size, int& output)
     -> bool {
@@ -40,7 +52,7 @@ extern "C" auto LLVMFuzzerTestOneInput(const unsigned char* data, size_t size)
   // exhaust all memory, so bound the search space to using 2^17 bytes of
   // memory for the argument text itself.
   size_t arg_length_sum = 0;
-  llvm::SmallVector<int, 16> arg_lengths(num_args);
+  llvm::SmallVector<int> arg_lengths(num_args);
   for (int& arg_length : arg_lengths) {
     if (!Read(data, size, arg_length) || arg_length < 0) {
       return 0;
@@ -57,7 +69,7 @@ extern "C" auto LLVMFuzzerTestOneInput(const unsigned char* data, size_t size)
   }
 
   // Lastly, read the contents of each argument out of the data.
-  llvm::SmallVector<llvm::StringRef, 16> args;
+  llvm::SmallVector<llvm::StringRef> args;
   args.reserve(num_args);
   for (int arg_length : arg_lengths) {
     args.push_back(
@@ -66,13 +78,15 @@ extern "C" auto LLVMFuzzerTestOneInput(const unsigned char* data, size_t size)
     size -= arg_length;
   }
 
-  std::string error_text;
-  llvm::raw_string_ostream error_stream(error_text);
-  llvm::raw_null_ostream output_stream;
-  Driver d(output_stream, error_stream);
-  if (!d.RunFullCommand(args)) {
-    error_stream.flush();
-    if (error_text.find("ERROR:") == std::string::npos) {
+  llvm::IntrusiveRefCntPtr<llvm::vfs::InMemoryFileSystem> fs =
+      new llvm::vfs::InMemoryFileSystem;
+  RawStringOstream error_stream;
+  llvm::raw_null_ostream null_ostream;
+  Driver driver(fs, install_paths, /*input_stream=*/nullptr, &null_ostream,
+                &error_stream, /*fuzzing=*/true);
+  if (!driver.RunCommand(args).success) {
+    auto str = error_stream.TakeStr();
+    if (llvm::StringRef(str).find("error:") == llvm::StringRef::npos) {
       llvm::errs() << "No error message on a failure!\n";
       return 1;
     }
