@@ -216,6 +216,7 @@ fn Foo[T:! type](p: T*) -> (T*, ()) {
 // CHECK:STDOUT:     import_ir_inst185: {ir_id: ir4, inst_id: inst605}
 // CHECK:STDOUT:     import_ir_inst186: {ir_id: ir4, inst_id: inst606}
 // CHECK:STDOUT:     import_ir_inst187: {ir_id: ir4, inst_id: inst611}
+// CHECK:STDOUT:   clang_decls:     {}
 // CHECK:STDOUT:   name_scopes:
 // CHECK:STDOUT:     name_scope0:     {inst: inst14, parent_scope: name_scope<none>, has_error: false, extended_scopes: [], names: {name(Core): inst16, name0: inst53}}
 // CHECK:STDOUT:     name_scope1:     {inst: inst16, parent_scope: name_scope0, has_error: false, extended_scopes: [], names: {name3: inst69}}

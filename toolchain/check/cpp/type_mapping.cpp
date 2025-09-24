@@ -95,7 +95,7 @@ static auto TryMapClassType(Context& context, SemIR::ClassType class_type)
           .Get(context.classes().Get(class_type.class_id).scope_id)
           .clang_decl_context_id();
   if (clang_decl_id.has_value()) {
-    clang::Decl* clang_decl = context.clang_decls().Get(clang_decl_id).decl;
+    clang::Decl* clang_decl = context.clang_decls().Get(clang_decl_id).key.decl;
     auto* tag_type_decl = clang::cast<clang::TagDecl>(clang_decl);
     return context.ast_context().getCanonicalTagType(tag_type_decl);
   }
@@ -230,9 +230,6 @@ static auto MapToCppType(Context& context, SemIR::InstId inst_id)
 auto InventClangArg(Context& context, SemIR::InstId arg_id) -> clang::Expr* {
   clang::ExprValueKind value_kind;
   switch (SemIR::GetExprCategory(context.sem_ir(), arg_id)) {
-    case SemIR::ExprCategory::NotExpr:
-      CARBON_FATAL("Should not see these here");
-
     case SemIR::ExprCategory::Error:
       return nullptr;
 
@@ -242,6 +239,13 @@ auto InventClangArg(Context& context, SemIR::InstId arg_id) -> clang::Expr* {
 
     case SemIR::ExprCategory::EphemeralRef:
       value_kind = clang::ExprValueKind::VK_XValue;
+      break;
+
+    case SemIR::ExprCategory::NotExpr:
+      // A call using this expression as an argument won't be valid, but we
+      // don't diagnose that until we convert the expression to the parameter
+      // type.
+      value_kind = clang::ExprValueKind::VK_PRValue;
       break;
 
     case SemIR::ExprCategory::Value:
